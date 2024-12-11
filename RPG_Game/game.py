@@ -160,6 +160,28 @@ def draw_player_stats(player):
         text_surface = font.render(line, True, (255, 255, 255))
         screen.blit(text_surface, (stats_box_x + 10, stats_box_y + 10 + i * 30))
 
+def draw_combat_interface():
+    # Draw the combat background
+    screen.blit(combat_background_image, (0, 0))
+
+    # Draw health bars
+    draw_health_bar(Kebin.hp, Kebin.max_hp, 100, 50, 200, 20, (0, 255, 0))
+    draw_health_bar(mob.hp, mob.max_hp, screen_width - 250, 25, 200, 20, (0, 255, 0))
+
+    # Draw inventory
+    draw_inventory(Kebin)
+
+    # Draw skill button
+    skill_button_x = screen_width // 2 - 50
+    skill_button_y = screen_height - 100
+    skill_button_width = 100
+    skill_button_height = 50
+    pygame.draw.rect(screen, (0, 0, 255), (skill_button_x, skill_button_y, skill_button_width, skill_button_height))
+    skill_text = font.render("Skill", True, (255, 255, 255))
+    screen.blit(skill_text, (skill_button_x + skill_button_width // 2 - skill_text.get_width() // 2, skill_button_y + skill_button_height // 2 - skill_text.get_height() // 2))
+
+    return skill_button_x, skill_button_y, skill_button_width, skill_button_height
+
 class Player:
     def __init__(self, x, y, name, max_hp, strength, defense, potions, scale, flip=False, can_run=False):
         self.name = name
@@ -169,18 +191,20 @@ class Player:
         self.defense = defense
         self.potions = potions
         self.alive = True
-        self.inventory = {'sword': 1, 'potion': 1, 'shield': 1}  
-        self.abilities = {'fireball': 10, 'ice shard': 15, 'lightning strike': 20} 
+        self.inventory = {'sword': 1, 'potion': 1, 'shield': 1}  # Example inventory
+        self.abilities = {'fireball': 10, 'ice shard': 15, 'lightning strike': 20}  # Example abilities
         self.power_points = 0
-        self.upgrade_points = 5 
+        self.upgrade_points = 5  # Points available for upgrading stats
+        self.skill_cooldown = 5000  # Skill cooldown in milliseconds
+        self.last_skill_use_time = 0  # Last time the skill was used
 
-        self.animation_list = {'idle': [], 'run': []} 
+        self.animation_list = {'idle': [], 'run': []}  # Removed 'death'
         self.frame_index = 0
         self.update_time = pygame.time.get_ticks()
         self.action = 'idle'
         self.flip = flip
 
-
+        # Load animations
         self.load_animation('idle', scale, flip)
         if can_run:
             self.load_animation('run', scale, flip)
@@ -207,7 +231,7 @@ class Player:
         self.animation_list[action] = frames
 
     def update(self):
-        animation_cooldown = 150 
+        animation_cooldown = 150  # Adjusted to make the animation slower
         if pygame.time.get_ticks() - self.update_time > animation_cooldown:
             self.update_time = pygame.time.get_ticks()
             self.frame_index += 1
@@ -220,6 +244,7 @@ class Player:
             self.image = pygame.transform.flip(self.image, True, False)
 
     def draw(self):
+        # Draw the player/mob image
         screen.blit(self.image, self.rect)
 
     def set_action(self, action):
@@ -233,7 +258,7 @@ class Player:
         self.rect.y += dy
 
     def attack(self, target):
-        damage = self.strength + self.inventory.get('sword', 0) * 10
+        damage = self.strength + self.inventory.get('sword', 0) * 10  # Example damage calculation
         target.hp -= max(0, damage - target.defense)
         if target.hp <= 0:
             target.hp = 0
@@ -249,6 +274,17 @@ class Player:
     def use_ability(self, ability, target):
         damage = self.abilities[ability]
         target.hp -= max(0, damage - target.defense)
+
+    def use_skill(self, target):
+        current_time = pygame.time.get_ticks()
+        if current_time - self.last_skill_use_time >= self.skill_cooldown and self.hp > 10:
+            self.hp -= 10  # HP cost to use the skill
+            damage = self.strength * 2  # Example skill damage calculation
+            target.hp -= max(0, damage - target.defense)
+            if target.hp <= 0:
+                target.hp = 0
+                target.alive = False
+            self.last_skill_use_time = current_time
 
     def add_item(self, item):
         if item in self.inventory:
@@ -332,12 +368,12 @@ while run:
                 mouse_x, mouse_y = event.pos
                 play_button_x, play_button_y, button_width, button_height, quit_button_x, quit_button_y = draw_main_menu()
                 if play_button_x <= mouse_x <= play_button_x + button_width and play_button_y <= mouse_y <= play_button_y + button_height:
-                    show_main_menu = False 
+                    show_main_menu = False  # Start the game
                 elif quit_button_x <= mouse_x <= quit_button_x + button_width and quit_button_y <= mouse_y <= quit_button_y + button_height:
-                    run = False 
+                    run = False  # Quit the game
         else:
             if event.type == pygame.KEYDOWN and show_dialogue:
-                if event.key == pygame.K_RETURN:
+                if event.key == pygame.K_RETURN:  # Press Enter to move to the next dialogue
                     dialogue_index += 1
                     if dialogue_index >= len(dialogue_texts):
                         show_dialogue = False
@@ -354,53 +390,57 @@ while run:
                 show_player_stats = True
 
     if show_main_menu:
-        screen.fill((0, 0, 0))
+        screen.fill((0, 0, 0))  # Clear the screen
         draw_main_menu()
     else:
+        # Clear the screen and draw the map
         screen.fill((0, 0, 0))
         draw_map()
-        draw_inventory(Kebin)
+        draw_inventory(Kebin)  # Draw the inventory
 
         if not in_combat and not combat_over and not show_skill_tree and not show_abilities and not show_skill_tree_upgrade and not show_player_stats:
+            # Handle player movement
             keys = pygame.key.get_pressed()
             dx = dy = 0
             if keys[pygame.K_LEFT]:
-                dx = -3  
+                dx = -3  # Adjusted to make the movement slower
                 Kebin.set_action('run')
                 Kebin.flip = True
             elif keys[pygame.K_RIGHT]:
-                dx = 3 
+                dx = 3  # Adjusted to make the movement slower
                 Kebin.set_action('run')
                 Kebin.flip = False
             if keys[pygame.K_UP]:
-                dy = -3 
+                dy = -3  # Adjusted to make the movement slower
                 Kebin.set_action('run')
             elif keys[pygame.K_DOWN]:
-                dy = 3  
+                dy = 3  # Adjusted to make the movement slower
                 Kebin.set_action('run')
             if not (keys[pygame.K_LEFT] or keys[pygame.K_RIGHT] or keys[pygame.K_UP] or keys[pygame.K_DOWN]):
                 Kebin.set_action('idle')
 
             Kebin.move(dx, dy)
 
+            # Check for collision or proximity with the mob
             for mob in mob_list:
                 if Kebin.rect.colliderect(mob.rect):
                     show_dialogue = True
 
+            # Update and draw the player and mobs
             Kebin.update()
             Kebin.draw()
             for mob in mob_list:
                 mob.update()
                 mob.draw()
 
+            # Draw the dialogue box if needed
             if show_dialogue:
                 draw_dialogue_box(dialogue_texts[dialogue_index])
         elif in_combat:
-            screen.blit(combat_background_image, (0, 0)) 
-            draw_health_bar(Kebin.hp, Kebin.max_hp, 100, 50, 200, 20, (0, 255, 0))
-            draw_health_bar(mob.hp, mob.max_hp, screen_width - 250, 25, 200, 20, (0, 255, 0))
-            draw_inventory(Kebin) 
+            # Combat screen
+            skill_button_x, skill_button_y, skill_button_width, skill_button_height = draw_combat_interface()
 
+            # Update player and mob positions for combat
             Kebin.rect.center = (200, screen_height // 2)
             mob.rect.center = (screen_width - 200, screen_height // 2)
 
@@ -415,7 +455,7 @@ while run:
                 Kebin.draw()
                 mob.draw()
                 if current_time - combat_message_time < combat_message_duration:
-                    draw_dialogue_box("Player's turn: Press A to attack, P to use potion")
+                    draw_dialogue_box("Player's turn: Press A to attack, P to use potion, S to use skill")
                 else:
                     keys = pygame.key.get_pressed()
                     if keys[pygame.K_a]:
@@ -424,6 +464,10 @@ while run:
                         combat_message_time = current_time
                     elif keys[pygame.K_p]:
                         Kebin.use_potion()
+                        player_turn = False
+                        combat_message_time = current_time
+                    elif keys[pygame.K_s]:
+                        Kebin.use_skill(mob)
                         player_turn = False
                         combat_message_time = current_time
             else:
